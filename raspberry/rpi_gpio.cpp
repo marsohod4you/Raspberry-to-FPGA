@@ -1,7 +1,10 @@
 ///////////////////////////////////////
 // Module:	rpi_gpio
+// Author:	Nick Kovach
+// Copyright (c)  2017 InproPlus Ltd
 // Remarks:
 //	Raspberry PI3 GPIO access functions
+//	TCP server which receives network commands for JTAG
 ///////////////////////////////////////
 
 #include <stdio.h>
@@ -30,6 +33,8 @@ void *gpio_map;
 int setup_rpi_gpio()
 {
 	bool pi_zero = false;
+	bool pi_4 = false;
+	int num_cpus = 0;
 	try {
 		ifstream t;
 		t.open("/proc/cpuinfo");
@@ -40,9 +45,10 @@ int setup_rpi_gpio()
 		else
 		{
 			string s;
-			int n = 0;
+			//int n = 0;
 			while (getline(t, s))
 			{
+/*
 				size_t pos = s.find("BCM2835");
 				if (pos != string::npos)
 				{
@@ -62,13 +68,40 @@ int setup_rpi_gpio()
 				n++;
 				if (n == 128)
 					break; //too many lines
+*/
+				size_t pos = s.find("processor");
+				if (pos != string::npos)
+					num_cpus++;
+				size_t pos2 = s.find("Pi 4");
+				if (pos2 != string::npos)
+					pi_4 = true;
 			}
+			if(num_cpus==1)
+				pi_zero=true;
 		}
 	}
 	catch (...) {
 	}
 
+	cout << "Number of processors: " << num_cpus << "\n";
 	unsigned int gpio_base_addr = GPIO_BASE+ (pi_zero ? BCM2835_PERI_BASE : BCM2709_PERI_BASE);
+	if( pi_zero )
+	{
+		gpio_base_addr = BCM2835_PERI_BASE + GPIO_BASE;
+		cout << "Assume Pi-Zero, IO Base Addr: " << std::hex << gpio_base_addr << std::dec << "\n";
+	}
+	else
+	if( pi_4 )
+	{
+		gpio_base_addr = RPI4_PERI_BASE + GPIO_BASE;
+		cout << "Assume Pi4, IO Base Addr: " << std::hex << gpio_base_addr << std::dec << "\n";
+	}
+	else
+	{
+		gpio_base_addr = BCM2709_PERI_BASE + GPIO_BASE;
+		cout << "Assume Pi2 or Pi3, IO Base Addr: " << std::hex << gpio_base_addr << std::dec << "\n";
+	}
+
 
    /* open /dev/mem */
    if ((mem_fd = open("/dev/mem", O_RDWR|O_SYNC) ) < 0) {
@@ -95,5 +128,14 @@ int setup_rpi_gpio()
  
    // Always use volatile pointer!
    gpio = (volatile unsigned *)gpio_map;
+   
+	INP_GPIO(TMS_RPI_PIN);
+	OUT_GPIO(TMS_RPI_PIN);
+	INP_GPIO(TDI_RPI_PIN);
+	OUT_GPIO(TDI_RPI_PIN);
+	INP_GPIO(TCK_RPI_PIN);
+	OUT_GPIO(TCK_RPI_PIN);
+	INP_GPIO(TDO_RPI_PIN);
+
    return 0;
 }
